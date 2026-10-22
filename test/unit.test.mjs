@@ -75,21 +75,41 @@ test('core: buildEdit 校验数据体', () => {
 // ── 目标枚举 / 读块 ──────────────────────────────────────────────────────────
 const sessions = fakeSessions({ s1: fakeSession([REPLY, SUMMARY]) })
 
-test('targets: 标题栏入口只列压缩摘要', () => {
+test('targets: 标题栏入口列出最后一轮的全部步骤 + 压缩摘要', () => {
   const { targets } = readTargets(sessions, 's1')
-  assert.deepEqual(targets.map(target => target.label), ['压缩摘要 #1'])
-  assert.deepEqual(targets.map(target => target.scope), ['compaction'])
+  assert.deepEqual(targets.map(target => target.label), ['第 1 步', '压缩摘要 #1'])
+  assert.deepEqual(targets.map(target => target.scope), ['assistant', 'compaction'])
 })
 
-test('targets: 操作条入口 = 本条回复 + 压缩摘要', () => {
+test('targets: 操作条入口 = 本轮全部步骤（本条在最后）+ 压缩摘要', () => {
   const { targets } = readTargets(sessions, 's1', 'msg-reply')
   assert.deepEqual(targets.map(target => target.label), ['本条回复', '压缩摘要 #1'])
   assert.deepEqual(targets.map(target => target.scope), ['assistant', 'compaction'])
 })
 
-test('targets: 没有摘要时退回最新回复', () => {
-  const onlyReply = fakeSessions({ s2: fakeSession([REPLY]) })
-  assert.deepEqual(readTargets(onlyReply, 's2').targets.map(target => target.label), ['最新回复'])
+test('targets: 一轮多步时中间步骤也能选，别轮不混进来', () => {
+  const step = (n, content) => assistantEvent(10 + n * 2, { id: `msg-s${n}`, role: 'assistant', content }, { turn: 7, step: n })
+  const earlier = assistantEvent(2, {
+    id: 'msg-old', role: 'assistant', content: [{ type: 'text', text: '上一轮' }],
+  }, { turn: 6, step: 1 })
+  const multi = fakeSessions({
+    s1: fakeSession([
+      earlier,
+      step(1, [{ type: 'reasoning', text: 'think 1' }, { type: 'text', text: 'call tool' }]),
+      step(2, [{ type: 'reasoning', text: 'think 2' }]),
+      step(3, [{ type: 'reasoning', text: 'think 3' }, { type: 'text', text: 'final' }]),
+    ]),
+  })
+  // 操作条入口锚定第 3 步：仍然把整轮带出来，本条标记为「本条回复」
+  const action = readTargets(multi, 's1', 'msg-s3').targets
+  assert.deepEqual(action.map(target => target.label), ['第 1 步', '第 2 步', '本条回复'])
+  assert.deepEqual(action.map(target => target.messageId), ['msg-s1', 'msg-s2', 'msg-s3'])
+  // 标题栏入口锚定最后一轮的第 3 步
+  const header = readTargets(multi, 's1').targets
+  assert.deepEqual(header.map(target => target.label), ['第 1 步', '第 2 步', '第 3 步'])
+  // 中间步骤读得到块，而且就是这一步自己的思维链
+  const blocks = readBlocks(multi, 's1', 'msg-s2').blocks
+  assert.deepEqual(blocks.map(block => [block.kind, block.text]), [['reasoning', 'think 2']])
 })
 
 test('blocks: 回复两块 / 摘要一块', () => {

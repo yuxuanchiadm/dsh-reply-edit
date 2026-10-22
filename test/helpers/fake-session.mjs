@@ -4,9 +4,9 @@
 // deriveEventMessage(event) / snapshotEvents()，写路径再加 append()。
 // 只要这五个形状对得上，逻辑就能被验证——不需要启动 DSH。
 
-/** assistant/message 事件（助手回复）。 */
-export function assistantEvent(seq, message) {
-  return { type: 'assistant/message', seq, time: 1, data: { turn: 0, step: 0, stream: [], message } }
+/** assistant/message 事件（助手回复）。一轮多步时用 turn/step 区分。 */
+export function assistantEvent(seq, message, { turn = 1, step = 1 } = {}) {
+  return { type: 'assistant/message', seq, time: 1, data: { turn, step, stream: [], message } }
 }
 
 /** 压缩摘要事件（宿主压缩历史时插入的 user/message）。 */

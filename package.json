@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-reply-edit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "type": "module",
   "description": "Rewrite an assistant reply (text or reasoning) in a live session; the model adopts the edited version from the next turn on.",

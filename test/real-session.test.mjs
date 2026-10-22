@@ -84,6 +84,24 @@ test('真实日志：读块与已改写标记不抛', { skip: SKIP }, () => {
   assert.equal(marks.count, 0)
 })
 
+test('真实日志：最后一轮的每一步都能选', { skip: SKIP }, () => {
+  const events = readEvents(LOG)
+  const messages = events.filter(event => event.type === 'assistant/message')
+  assert.ok(messages.length > 0, '日志里没有助手消息')
+  const lastTurn = messages[messages.length - 1].data?.turn
+  const editable = messages.filter(event => event.data?.turn === lastTurn
+    && (event.data.message?.content ?? []).some(block => block.type === 'text'
+      || block.type === 'reasoning' || block.type === 'thinking'))
+
+  const { targets } = readTargets(fakeSessions({ live: sessionFromLog(events) }), 'live')
+  const assistants = targets.filter(target => target.scope === 'assistant')
+  assert.equal(assistants.length, editable.length, '最后一轮的每一步都该在目标列表里')
+  assert.deepEqual(assistants.map(target => target.messageId), editable.map(event => event.data.message.id))
+  for (const target of assistants) {
+    assert.match(target.label, /^(本条回复|第 \d+ 步|回复)$/)
+  }
+})
+
 test('真实日志：写进去的 patch 事件形状自洽', { skip: SKIP }, () => {
   const patches = readEvents(LOG).filter(event => event.type === 'reply-edit/patch')
   for (const item of patches) {
