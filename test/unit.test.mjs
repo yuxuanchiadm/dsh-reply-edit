@@ -9,6 +9,7 @@ import { projection } from '../lib/projection.js'
 import { readBlocks, readMarks, readTargets, writeEdit } from '../lib/session.js'
 import {
   assistantEvent, checkpointEvent, fakeSession, fakeSessions, projectContext,
+  toolCallEvent, toolResultEvent,
 } from './helpers/fake-session.mjs'
 
 const REPLY = assistantEvent(3, {
@@ -149,4 +150,46 @@ test('marks: 压缩摘要被改也算，scope 为 compaction', () => {
 
 test('marks: 原文 = 投影时没有任何标记（改回去就消失）', () => {
   assert.deepEqual(readMarks(sessions, 's1').count, 0)
+})
+
+// ── 工具结果（role: tool 的消息）──────────────────────────────────────────────
+const TOOL_CALL = toolCallEvent(4, { callId: 'call-1', name: 'pwsh', turn: 2, step: 1 })
+const TOOL_RESULT = toolResultEvent(5, {
+  id: 'msg-tool', toolCallId: 'call-1', text: 'stdout: ok', turn: 2, step: 1,
+})
+const stepReply = assistantEvent(3, {
+  id: 'msg-step1', role: 'assistant', content: [{ type: 'reasoning', text: 'run it' }, { type: 'text', text: 'running' }],
+}, { turn: 2, step: 1 })
+const toolSessions = fakeSessions({ s1: fakeSession([stepReply, TOOL_RESULT], { extra: [TOOL_CALL] }) })
+
+test('projection: 工具结果可改写，role / toolCallId 保留', () => {
+  const ctx = projectContext([stepReply, TOOL_RESULT], [3, 5])
+  const projected = projection.project(patch(9, edit(5, 0, 'text', 'EDITED OUTPUT')), ctx)
+  assert.equal(projected.get(5)?.content[0].text, 'EDITED OUTPUT')
+  assert.equal(projected.get(5)?.role, 'tool')
+  assert.equal(projected.get(5)?.toolCallId, 'call-1')
+})
+
+test('targets: 本轮的工具结果也列出来，带工具名', () => {
+  const { targets } = readTargets(toolSessions, 's1', 'msg-step1')
+  assert.deepEqual(targets.map(target => target.scope), ['assistant', 'tool'])
+  assert.deepEqual(targets.map(target => target.label), ['本条回复', '第 1 步 · 工具结果 · pwsh'])
+})
+
+test('blocks: 工具结果 scope 为 tool，块是正文', () => {
+  const blocks = readBlocks(toolSessions, 's1', 'msg-tool')
+  assert.equal(blocks.ok, true)
+  assert.equal(blocks.scope, 'tool')
+  assert.deepEqual(blocks.blocks.map(block => [block.blockIndex, block.kind]), [[0, 'text']])
+})
+
+test('marks: 工具结果被改也计入，scope 为 tool', () => {
+  const edited = fakeSession([stepReply, TOOL_RESULT], {
+    extra: [TOOL_CALL],
+    project: event => (event.type === 'tool/result'
+      ? { ...event.data.message, content: [{ type: 'text', text: 'EDITED OUTPUT' }] }
+      : event.data.message),
+  })
+  const marks = readMarks(fakeSessions({ s1: edited }), 's1')
+  assert.deepEqual(marks.edited.map(item => [item.messageId, item.scope]), [['msg-tool', 'tool']])
 })

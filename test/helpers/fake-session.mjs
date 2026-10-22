@@ -19,19 +19,48 @@ export function checkpointEvent(seq, id, text) {
   }
 }
 
+/** 工具结果事件（role: tool 的消息，模型看到的就是它）。 */
+export function toolResultEvent(seq, { id, toolCallId, text, isError = false, turn = 1, step = 1 }) {
+  return {
+    type: 'tool/result',
+    seq,
+    time: 1,
+    data: {
+      turn,
+      step,
+      message: {
+        role: 'tool',
+        source: { kind: 'tool', callId: toolCallId },
+        toolCallId,
+        content: [{ type: 'text', text }],
+        isError,
+        id,
+      },
+    },
+    surfaceOp: 'append',
+  }
+}
+
+/** tool/call 事件（不进 surface，只用来把 callId 翻成工具名）。 */
+export function toolCallEvent(seq, { callId, name, turn = 1, step = 1 }) {
+  return { type: 'tool/call', seq, time: 1, data: { turn, step, callId, name, arguments: '{}' } }
+}
+
 /**
  * 把事件列表包装成 Session 的最小形状。
- * @param {Array<object>} events 会话事件（按 seq 建立 surface）
- * @param {{project?: (event: object) => object}} [options] 覆盖 deriveEventMessage，用来模拟「已被改写」
+ * @param {Array<object>} events 进入 surface 的消息事件
+ * @param {{project?: (event: object) => object, extra?: Array<object>}} [options]
+ *        project 覆盖 deriveEventMessage（模拟「已被改写」）；extra 是只在日志里、不进 surface 的事件
  */
-export function fakeSession(events, { project } = {}) {
+export function fakeSession(events, { project, extra = [] } = {}) {
   const bySeq = new Map(events.map(event => [event.seq, event]))
+  const log = [...events, ...extra].sort((a, b) => a.seq - b.seq)
   return {
     surface: { nodes: [...bySeq.keys()].sort((a, b) => a - b) },
     eventAt: seq => bySeq.get(seq),
     deriveEventMessage: event => project?.(event)
       ?? (event.type === 'user/message' ? event.data : event.data?.message),
-    snapshotEvents: () => events,
+    snapshotEvents: () => log,
     append: (type, data) => ({ type, data, seq: 42 }),
   }
 }

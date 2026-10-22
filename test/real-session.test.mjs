@@ -49,8 +49,9 @@ function readEvents(file) {
 /** 把日志里的消息事件当作 surface（等价于宿主折叠后的样子，用于验证读路径）。 */
 function sessionFromLog(events) {
   const messages = events.filter(event => event.type === 'assistant/message'
+    || event.type === 'tool/result'
     || (event.type === 'user/message' && event.data?.source?.kind === 'compact-checkpoint'))
-  return fakeSession(messages)
+  return fakeSession(messages, { extra: events.filter(event => event.type === 'tool/call') })
 }
 
 test('真实日志：可改写目标枚举正常，压缩摘要都在', { skip: SKIP }, () => {
@@ -99,6 +100,23 @@ test('真实日志：最后一轮的每一步都能选', { skip: SKIP }, () => {
   assert.deepEqual(assistants.map(target => target.messageId), editable.map(event => event.data.message.id))
   for (const target of assistants) {
     assert.match(target.label, /^(本条回复|第 \d+ 步|回复)$/)
+  }
+})
+
+test('真实日志：最后一轮的工具结果也在目标里', { skip: SKIP }, () => {
+  const events = readEvents(LOG)
+  const messages = events.filter(event => event.type === 'assistant/message')
+  const lastTurn = messages[messages.length - 1].data?.turn
+  const results = events.filter(event => event.type === 'tool/result'
+    && event.data?.turn === lastTurn
+    && (event.data.message?.content ?? []).some(block => typeof block.text === 'string'))
+
+  const { targets } = readTargets(fakeSessions({ live: sessionFromLog(events) }), 'live')
+  const tools = targets.filter(target => target.scope === 'tool')
+  assert.equal(tools.length, results.length, '最后一轮的工具结果都该在目标列表里')
+  for (const target of tools) {
+    assert.match(target.label, /^第 \d+ 步 · 工具结果( · .+)?$/)
+    assert.ok(target.blocks.length > 0)
   }
 })
 
