@@ -1,0 +1,20 @@
+{
+  "meta": {
+    "title": "Reply Edit",
+    "description": "Rewrite the assistant's reply or reasoning in a live session; the model adopts the edited version from the next turn on (immediate, no restart)."
+  },
+  "action": "Rewrite",
+  "dialog": {
+    "title": "Rewrite assistant reply",
+    "body": "Text",
+    "reasoning": "Reasoning",
+    "hint": "After writing, every later turn of this session sees only the edited content.",
+    "cancel": "Cancel",
+    "save": "Write",
+    "saving": "Writing…",
+    "loading": "Loading…",
+    "empty": "This message has no editable text",
+    "saved": "Written — the model sees it from the next turn on",
+    "error": "Write failed"
+  }
+}

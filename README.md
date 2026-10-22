@@ -1,0 +1,65 @@
+# dsh-reply-edit
+
+DSH（DeepSeek Harness）插件：**改写会话里助手的回复（正文或思维链）以及压缩摘要（compact 记忆），下一轮对话模型即按改写后的内容思考，不用重启。**
+
+只保留核心机制：约 900 行、零运行时依赖、无构建步骤。
+
+## 使用
+
+两个入口，同一个面板：
+
+- 鼠标移到一条**已完成的助手回复**上 → 点操作条里的铅笔（预选这条消息）；
+- 会话标题右侧的铅笔 → 总入口，默认落在最近一条**压缩摘要**上。
+
+选目标 → 改文本 → **写入改写**（Ctrl/Cmd+Enter）。压缩摘要可直接改，等于改紧凑记忆本身；真实用户消息不在可改范围。
+
+**哪些改过**（把投影后文本与原文逐块比对，所以改回原文标记会自动消失）：
+
+- 标题栏铅笔上的**蓝色数字角标** = 本会话已改写的条数，始终可见，刷新/重启后仍在；
+- 那条消息操作条里的铅笔变**品牌色 + 小圆点**。
+
+## 原理
+
+改写走「自有事件 + 宿主 message projection」，**不修改任何宿主事件**：
+
+1. `session.append('reply-edit/patch', {v, seq, blockIndex, kind, text})` —— 纯日志事件，不进 surface，不影响压缩/遮蔽关系；
+2. `lib/projection.js` 把它解释成「该 seq 的消息」的替换值，叠加在已投影消息上；
+3. 宿主每次请求都重走 `deriveMessages()` → 立即生效；事件随会话落盘 → 重启后仍在。
+
+压缩摘要是带 `surfaceOp: replace` 的 `user/message` 事件，把 patch 的 `seq` 指向它即可，不需要额外机制。
+
+`lib/stamp.js` 是唯一碰宿主内部的地方：宿主读日志时对未知事件类型有 fail-closed 闸门（没有 `ignorable: true` 就整条拒读），所以在事件入日志的唯一漏斗 `commit(event, entry)` 上给自己类型的事件补标记；补不上就**拒绝写入**，绝不写坏会话。
+
+## 安装
+
+```
+plugin_manager install_bundle  target = <本目录绝对路径>
+```
+
+或以目录链接方式安装后重启 DSH。宿主 half 改动需重载插件，网页 half 改动需刷新页面。
+
+## 局限
+
+- **只改活会话**：会话不在内存里时报 `SESSION_NOT_LIVE`，不做落盘改写；
+- **页面正文不跟着变**：对话记录由网页端按原始事件渲染，本插件只改「模型所见」；
+- **被压缩掉的历史回复改不了**：已被摘要取代、模型看不见，返回 `SHADOWED`；
+- 改写点之后的 KV 缓存失效；
+- 卸载插件后历史 patch 事件被静默跳过，会话照常打开、内容退回原文。
+
+## 开发
+
+```
+npm test                               # 纯逻辑单测（node:test），无需 DSH
+DSH_SESSION_LOG=<会话日志> npm test     # 追加真实日志回归，默认跳过
+```
+
+```
+index.js / client.js   宿主 half / 网页 half 入口
+lib/                   core（纯数据）→ projection → session → stamp → routes
+test/                  单测 + 真实日志回归 + 假 session 夹具
+docs/research/         写这个插件前对宿主与客户端 API 的调研记录（带 file:line）
+```
+
+## 许可
+
+MIT

@@ -1,0 +1,47 @@
+{
+  "name": "@local/dsh-reply-edit",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Rewrite an assistant reply (text or reasoning) in a live session; the model adopts the edited version from the next turn on.",
+  "license": "MIT",
+  "author": "yuxuanchiadm",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib/core.js",
+    "lib/projection.js",
+    "lib/session.js",
+    "lib/stamp.js",
+    "lib/routes.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=18.13"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "keywords": ["dsh", "dsh-plugin", "session", "reply", "edit"]
+}

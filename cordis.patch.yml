@@ -1,0 +1,7 @@
+# dsh-reply-edit bundle patch：向 web 组合挂载一个插件条目。
+#
+# 只 insert 一个以插件名命名的条目，不改任何既有条目，因此与其它插件共享同一份
+# 组合树时不会互相覆盖。用插件管理器安装后会替换成实际 package 名。
+- insert:
+    - id: dsh-reply-edit
+      name: '@local/dsh-reply-edit'
